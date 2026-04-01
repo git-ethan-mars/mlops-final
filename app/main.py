@@ -138,7 +138,7 @@ def calculate_business_metrics(labeled_df):
             y_true = subset['target']
 
             if stage == 'staging' and staging_model_version != subset['version'].iloc[0]:
-                y_pred = staging_model.predict(pd.DataFrame(subset['features']))
+                y_pred = staging_model.predict(pd.DataFrame(list(subset['features'])))
             else:
                 y_pred = subset['prediction']
             acc = sklearn.metrics.accuracy_score(y_true, y_pred)
@@ -187,7 +187,6 @@ def analyze():
 
     report += f"\n## === Conclusion\n{conclusion}\n"
 
-    # Сохранение отчёта
     report_path = "logs/ab_test_summary.md"
     with open(report_path, 'w') as f:
         f.write(report)
