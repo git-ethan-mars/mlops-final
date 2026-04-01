@@ -1,0 +1,69 @@
+services:
+  flask:
+    build: ./app
+    ports:
+      - "8000:8000"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - GIT_PYTHON_REFRESH=quiet
+    networks:
+      - monitoring
+    depends_on:
+      - mlflow
+    volumes:
+      - ./app/logs:/app/logs
+      - ./app/data:/app/data
+      - mlflow_artifacts:/fucky/sucky
+
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.11.0
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow server
+      --backend-store-uri sqlite:////fucky/sucky/mlflow.db
+      --default-artifact-root /fucky/sucky/artifacts
+      --host 0.0.0.0
+      --port 5000
+    volumes:
+      - mlflow_artifacts:/fucky/sucky
+    networks:
+      - monitoring
+
+  airflow:
+    image: apache/airflow:2.8.0
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
+      AIRFLOW__CORE__FERNET_KEY: ''
+      PSI_THRESHOLD: 0.1
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - airflow_data:/opt/airflow
+    networks:
+      - monitoring
+    command: >
+      bash -c "
+        if ! airflow connections get 'flask_api' &>/dev/null; then
+          airflow connections add 'flask_api' --conn-uri 'http://flask:8000'
+        fi &&
+        airflow db init &&
+        airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com &&
+        airflow webserver -p 8080 &
+        airflow scheduler
+      "
+    user: "50000:0"
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  mlflow_artifacts:
+  airflow_data:
